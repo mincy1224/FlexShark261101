@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(shark)
 
-enable_testing()
-
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -60,54 +58,6 @@ PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# list of all single running tests
-set(SINGLE_TESTS
-    dcfbit
-    dcfring
-    dpfring
-    span
-    truncate-clear
-)
-
-# run for all single running tests
-foreach(testname IN LISTS SINGLE_TESTS)
-    add_executable(test-single-${testname} tests/single/${testname}.cpp)
-    target_link_libraries(test-single-${testname} ${PROJECT_NAME})
-    add_test(NAME test-single-${testname} COMMAND test-single-${testname})
-endforeach()
-
-set(MULTI_TESTS
-    init
-    matmul
-    select
-    drelu
-    relu
-    truncate
-    down
-    up
-    inv
-    gelu
-    nexp
-    rsqrt
-    softmax
-    matmul-big
-)
-
-foreach(testname IN LISTS MULTI_TESTS)
-    add_executable(test-multi-${testname} tests/multi/${testname}.cpp)
-    target_link_libraries(test-multi-${testname} ${PROJECT_NAME})
-    add_test(NAME test-multi-${testname} COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-multi.sh multi-${testname})
-endforeach()
-
-set (BENCHMARKS
-    bert
-    gpt2
-)
-
-foreach (benchmark IN LISTS BENCHMARKS)
-    add_executable(benchmark-${benchmark} benchmarks/${benchmark}.cpp)
-    target_link_libraries(benchmark-${benchmark} ${PROJECT_NAME})
-endforeach()
-
-add_executable(benchmark-bert-acc benchmarks/bert_acc.cpp)
-target_link_libraries(benchmark-bert-acc ${PROJECT_NAME} cnpy)
+# Application entry point, isolated under app261101/
+add_executable(app261101 app261101/src/main.cpp)
+target_link_libraries(app261101 ${PROJECT_NAME})
