@@ -59,5 +59,12 @@ PUBLIC
 )
 
 # Application entry point, isolated under app261101/
-add_executable(app261101 app261101/src/main.cpp)
+add_executable(app261101
+    app261101/src/main.cpp
+    app261101/src/fs_bert.cpp
+)
+target_include_directories(app261101
+    PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
+)
 target_link_libraries(app261101 ${PROJECT_NAME})
+
