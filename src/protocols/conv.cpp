@@ -1,3 +1,4 @@
+#include "shark/types/u64.hpp"
 #include <shark/types/u128.hpp>
 #include <shark/protocols/matmul.hpp>
 #include <shark/protocols/common.hpp>
@@ -203,7 +204,36 @@ namespace shark {
                     eval(f, padding, stride, ci, co, inH, inW, Img, Filter, Z);
                 }
             }
- 
+
+            // modified version
+            namespace mod
+            {
+                void call
+                (
+                    u64 f, 
+                    u64 padding, 
+                    u64 stride, 
+                    u64 ci, 
+                    u64 co, 
+                    u64 in_h, 
+                    u64 in_w, 
+                    const shark::span<u64>& img, 
+                    const shark::span<u64>& filter,
+                    shark::span<u64>& result
+                )
+                {
+                    always_assert(img.size() % (in_h * in_w * ci) == 0);
+                    u64 bs = img.size() / (in_h * in_w * ci);
+                    always_assert(filter.size() == f * f * ci * co);
+                    u64 out_h = (in_h - f + 2 * padding) / stride + 1;
+                    u64 out_w = (in_w - f + 2 * padding) / stride + 1;
+                    always_assert(result.size() == bs * out_h * out_w * co);
+
+                    conv::call(f, padding, stride, ci, co, in_h, in_w, img, filter, result);
+                }
+            }
+
+            // original version
             shark::span<u64> call(u64 f, u64 padding, u64 stride, u64 ci, u64 co, u64 inH, u64 inW, const shark::span<u64> &Img, const shark::span<u64> &Filter)
             {
                 always_assert(Img.size() % (inH * inW * ci) == 0);

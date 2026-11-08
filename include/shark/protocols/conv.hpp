@@ -11,7 +11,24 @@ namespace shark {
             void call(u64 f, u64 padding, u64 stride, u64 ci, u64 co, u64 inH, u64 inW, const shark::span<u64> &Img, const shark::span<u64> &Filter, shark::span<u64> &Z);
             shark::span<u64> call(u64 f, u64 padding, u64 stride, u64 ci, u64 co, u64 inH, u64 inW, const shark::span<u64> &Img, const shark::span<u64> &Filter);
             shark::span<u64> emul(u64 f, u64 padding, u64 stride, u64 ci, u64 co, u64 inH, u64 inW, const shark::span<u64> &Img, const shark::span<u64> &Filter);
-
+            
+            namespace mod
+            {
+                void call
+                (
+                    u64 f, 
+                    u64 padding, 
+                    u64 stride, 
+                    u64 ci, 
+                    u64 co, 
+                    u64 in_h, 
+                    u64 in_w, 
+                    const shark::span<u64>& img, 
+                    const shark::span<u64>& filter,
+                    shark::span<u64>& result
+                );
+            }
+        
         }
     }
 }

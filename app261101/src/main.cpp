@@ -62,6 +62,7 @@ int main(int argc, char** argv)
             {
                 std::cout << C[i * n + j] << " ";
             }
+            
             std::cout << '\n';
         }
     }

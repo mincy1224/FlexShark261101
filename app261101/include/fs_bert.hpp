@@ -188,5 +188,4 @@ namespace fs
     void share_model_weights(BertModel &model);
 }
 
-
 #endif // !FLEX_SHARK_BERT_HPP
