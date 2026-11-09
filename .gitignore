@@ -9,6 +9,7 @@ venv/
 /**/weights.pt
 
 data/
+lenet5_data/
 results/
 ml/datasets/**/*.txt
 ml/datasets/**/*.json
@@ -16,3 +17,4 @@ ml/datasets/**/*.json
 *.csv
 *.dat
 .cache
+*.pyc
