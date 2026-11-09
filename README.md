@@ -7,6 +7,12 @@ Download the weights & dataset.
 ```
 python3 -m pip install onnx
 
-chmod +x ./script/lenet5.sh
-./script/lenet5.sh
+chmod +x ./script/lenet5_data_ready.sh
+./script/lenet5_data_ready.sh
+```
+
+Test The Application.
+
+```
+python3 ./script/lenet5_test.py
 ```

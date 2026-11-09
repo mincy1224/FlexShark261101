@@ -58,13 +58,26 @@ PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+
 # Application entry point, isolated under app261101/
-add_executable(app261101
-    app261101/src/main.cpp
-    app261101/src/fs_bert.cpp
+
+add_executable(run_lenet5
+    app261101/src/run_lenet5.cpp
+    app261101/src/fs_lenet5.cpp
+    app261101/src/fs_scaled_tanh.cpp
 )
-target_include_directories(app261101
+target_include_directories(run_lenet5
     PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
 )
-target_link_libraries(app261101 ${PROJECT_NAME})
+
+target_link_libraries(run_lenet5 PRIVATE ${PROJECT_NAME} cnpy)
+
+# add_executable(run_bert
+#     app261101/src/run_bert.cpp
+#     app261101/src/fs_bert.cpp
+# )
+# target_include_directories(run_bert
+#     PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
+# )
+# target_link_libraries(run_bert ${PROJECT_NAME})
 

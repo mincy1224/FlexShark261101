@@ -106,14 +106,14 @@ namespace fs
         static constexpr std::size_t C3_OUTPUT_SIDE_    = (C3_INPUT_SIDE_ + 2 * PADDING_ - KERNEL_SIDE_) / STRIDE_ + 1;
         static constexpr std::size_t C3_OUTPUT_SIZE_    = C3_OUTPUT_SIDE_ * C3_OUTPUT_SIDE_ * C3_OUT_CHANNELS_;
 
-        // C3 的通道连接表，这里参考的是1998的原文
+        // C3 的通道连接表，这里参考的是LeCun 1998的原文
         static constexpr std::array<unsigned, C3_OUT_CHANNELS_> C3_CONNECTIONS_
         {
             0x07, 0x0e, 0x1c, 0x38, 0x31, 0x23,
             0x0f, 0x1e, 0x3c, 0x39, 0x33, 0x27,
             0x1b, 0x36, 0x2d, 0x3f
         };
-        
+
         shark::span<u64> c3_w_{C3_WEIGHT_SIZE_}; // [16, 5, 5, 6]
         shark::span<u64> c3_b_{C3_OUT_CHANNELS_};
 
