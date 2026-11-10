@@ -1,4 +1,4 @@
-#include "fs_bert.hpp"
+#include "fs_bert_fv.hpp"
 
 namespace fs
 {        
@@ -269,7 +269,7 @@ namespace fs
         return logits;
     }
 
-    span<u64> inference(span<u64> &x, BertModel &model, const span<u32> &mask)
+    span<u64> inference(const span<u64> &x, BertModel &model, const span<u32> &mask)
     {
         span<u64> y = x;
         for (int i = 0; i < model.n_layers; i++)
@@ -294,32 +294,32 @@ namespace fs
         }
     }
 
-    void share_model_weights(BertModel &model)
+    void share_model_weights(BertModel &model, int owner)
     {
         // if (party == SERVER) std::cout << "[INFO] Sharing model weights..." << std::endl;
-        
+
         for (int i = 0; i < model.n_layers; i++)
         {
-            input::call(model.c_attn_w[i], SERVER);
-            input::call(model.c_attn_b[i], SERVER);
-            input::call(model.c_proj_w[i], SERVER);
-            input::call(model.c_proj_b[i], SERVER);
-            input::call(model.ffn_up_w[i], SERVER);
-            input::call(model.ffn_up_b[i], SERVER);
-            input::call(model.ffn_down_w[i], SERVER);
-            input::call(model.ffn_down_b[i], SERVER);
-            
-            input::call(model.ln1_w[i], SERVER);
-            input::call(model.ln1_b[i], SERVER);
-            input::call(model.ln2_w[i], SERVER);
-            input::call(model.ln2_b[i], SERVER);
+            input::call(model.c_attn_w[i], owner);
+            input::call(model.c_attn_b[i], owner);
+            input::call(model.c_proj_w[i], owner);
+            input::call(model.c_proj_b[i], owner);
+            input::call(model.ffn_up_w[i], owner);
+            input::call(model.ffn_up_b[i], owner);
+            input::call(model.ffn_down_w[i], owner);
+            input::call(model.ffn_down_b[i], owner);
+
+            input::call(model.ln1_w[i], owner);
+            input::call(model.ln1_b[i], owner);
+            input::call(model.ln2_w[i], owner);
+            input::call(model.ln2_b[i], owner);
         }
-        
+
         if (model.accuracy_test)
         {
             // Share Classifier Head
-            input::call(model.classifier_w, SERVER);
-            input::call(model.classifier_b, SERVER);
+            input::call(model.classifier_w, owner);
+            input::call(model.classifier_b, owner);
         }
     }
 }

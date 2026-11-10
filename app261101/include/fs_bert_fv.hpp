@@ -1,8 +1,8 @@
 // @mincy1224: reorganize some parts to avoid redefinitions.
 //  impl details ref {app261101/src/fs_bert}
 
-#ifndef FLEX_SHARK_BERT_HPP
-#define FLEX_SHARK_BERT_HPP
+#ifndef FLEX_SHARK_BERT_FV_HPP
+#define FLEX_SHARK_BERT_FV_HPP
 
 #include <cstring>
 #include <shark/protocols/common.hpp>
@@ -183,9 +183,9 @@ namespace fs
 
     span<u64> bert_classifier(span<u64> &hidden_states, BertModel &model);
 
-    span<u64> inference(span<u64> &x, BertModel &model, const span<u32> &mask = span<u32>());
+    span<u64> inference(const span<u64> &x, BertModel &model, const span<u32> &mask = span<u32>());
 
-    void share_model_weights(BertModel &model);
+    void share_model_weights(BertModel &model, int owner = SERVER);
 }
 
-#endif // !FLEX_SHARK_BERT_HPP
+#endif // !FLEX_SHARK_BERT_FV_HPP

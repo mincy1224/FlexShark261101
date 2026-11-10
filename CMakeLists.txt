@@ -70,14 +70,28 @@ target_include_directories(run_lenet5
     PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
 )
 
-target_link_libraries(run_lenet5 PRIVATE ${PROJECT_NAME} cnpy)
+target_link_libraries(run_lenet5 PRIVATE ${PROJECT_NAME} 
+    cnpy
+)
 
-# add_executable(run_bert
-#     app261101/src/run_bert.cpp
-#     app261101/src/fs_bert.cpp
-# )
-# target_include_directories(run_bert
-#     PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
-# )
-# target_link_libraries(run_bert ${PROJECT_NAME})
+add_executable(run_bert_cls
+    app261101/src/run_bert_cls.cpp
+    app261101/src/fs_bert_cls.cpp
+)
+target_include_directories(run_bert_cls
+    PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
+)
+target_link_libraries(run_bert_cls ${PROJECT_NAME}
+    cnpy
+)
 
+add_executable(run_bert_fv
+    app261101/src/run_bert_fv.cpp
+    app261101/src/fs_bert_fv.cpp
+)
+target_include_directories(run_bert_fv
+    PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
+)
+target_link_libraries(run_bert_fv ${PROJECT_NAME}
+    cnpy
+)
