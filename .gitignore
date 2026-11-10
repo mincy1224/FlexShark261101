@@ -19,3 +19,4 @@ ml/datasets/**/*.json
 .cache
 *.pyc
 build-rel/
+bert_data/

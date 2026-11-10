@@ -84,21 +84,46 @@ int main(int argc, char** argv)
     const auto usage = [&]
     {
         std::cerr << "Usage:\n"
-                  << "  " << argv[0] << " 2\n"
-                  << "  " << argv[0] << " 0 [weights.npz]\n"
-                  << "  " << argv[0] << " 1 <sample.npz>\n";
+                  << "  " << argv[0] << " [--stream] 2\n"
+                  << "  " << argv[0] << " [--stream] 0 [weights.npz]\n"
+                  << "  " << argv[0] << " [--stream] 1 <sample.npz>\n"
+                  << "\n"
+                  << "  --stream   read the dealer key file on demand instead of\n"
+                  << "             loading it into memory; needed when the key file\n"
+                  << "             is larger than the available RAM\n";
         return 1;
     };
 
-    if (argc < 2)
+    // --stream selects oneShot=false; every other argument is positional.
+    bool one_shot = true;
+    const char* positional[3] = {nullptr, nullptr, nullptr};
+    int count = 0;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string_view arg(argv[i]);
+        if (arg == "--stream" || arg == "--oneshot=0" || arg == "--oneshot=false")
+        {
+            one_shot = false;
+            continue;
+        }
+        if (arg == "--oneshot=1" || arg == "--oneshot=true")
+        {
+            one_shot = true;
+            continue;
+        }
+        if (count == 3)
+            return usage();
+        positional[count++] = argv[i];
+    }
+    if (count == 0)
         return usage();
-    const std::string_view role(argv[1]);
+    const std::string_view role(positional[0]);
     if (role.size() != 1 || role[0] < '0' || role[0] > '2')
         return usage();
     const int pid = role[0] - '0';
-    if ((pid == protocol::DEALER && argc != 2) ||
-        (pid == protocol::SERVER && argc > 3) ||
-        (pid == protocol::CLIENT && argc != 3))
+    if ((pid == protocol::DEALER && count != 1) ||
+        (pid == protocol::SERVER && count > 2) ||
+        (pid == protocol::CLIENT && count != 2))
         return usage();
 
     try
@@ -107,7 +132,7 @@ int main(int argc, char** argv)
         shark::span<u32> mask(TOKEN_COUNT);
         if (pid == protocol::CLIENT)
         {
-            const auto sample = cnpy::npz_load(argv[2]);
+            const auto sample = cnpy::npz_load(positional[1]);
             const auto embeddings = read_array<u64>(sample, "input", {TOKEN_COUNT, HIDDEN_SIZE});
             const auto attention_mask = read_array<u32>(sample, "attention_mask", {TOKEN_COUNT});
             std::copy(embeddings.begin(), embeddings.end(), input.begin());
@@ -121,12 +146,12 @@ int main(int argc, char** argv)
         }
         else
         {
-            protocol::init::eval(pid, "127.0.0.1", 42069);
+            protocol::init::eval(pid, "127.0.0.1", 42069, one_shot);
         }
 
         fs::BertModel model(12, 12, HIDDEN_SIZE, FFN_SIZE, LABEL_COUNT, true);
         if (pid == protocol::SERVER)
-            load_weights(model, argc == 3 ? argv[2] : "raw_data/bert_weights_fixed.npz");
+            load_weights(model, count == 2 ? positional[1] : "raw_data/bert_weights_fixed.npz");
         fs::share_model_weights(model, protocol::SERVER);
 
         protocol::input::call(input, protocol::CLIENT);

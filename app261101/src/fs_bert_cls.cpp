@@ -22,8 +22,6 @@
 #include <shark/utils/globals.hpp>
 #include <shark/utils/timer.hpp>
 
-// Same computation as fs_bert_fv, kept here so this app does not depend on it.
-
 using namespace shark;
 using namespace shark::protocols;
 
@@ -31,14 +29,12 @@ namespace sp = shark::protocols;
 
 struct fs::bert_cls::model
 {
-    // config
     u64 n_layers = 12;
     u64 n_heads = 12;
     u64 n_embd = 768;
     u64 n_interm = 3072;
-    int logdivisor = 3; // log2(sqrt(n_embd / n_heads))
+    int logdivisor = 3; 
 
-    // weights
     std::vector<span<u64>> c_attn_w;
     std::vector<span<u64>> c_attn_b;
 
@@ -46,30 +42,50 @@ struct fs::bert_cls::model
     std::vector<span<u64>> c_proj_b;
 
     std::vector<span<u64>> ffn_up_w;
-    std::vector<span<u64>> ffn_up_b; // Note: ffn_up_b must be keeping 2f precision
+    std::vector<span<u64>> ffn_up_b;
 
     std::vector<span<u64>> ffn_down_w;
     std::vector<span<u64>> ffn_down_b;
 
-    // LayerNorm weights
     std::vector<span<u64>> ln1_w;
     std::vector<span<u64>> ln1_b;
     std::vector<span<u64>> ln2_w;
     std::vector<span<u64>> ln2_b;
 
-    // Classifier head
     span<u64> classifier_w;
     span<u64> classifier_b;
     u64 num_labels = 2;
 
     bool accuracy_test = false;
 
-    model(u64 layers, u64 heads, u64 embd, u64 interm, u64 labels, bool acc_test)
-        : n_layers(layers), n_heads(heads), n_embd(embd), n_interm(interm),
-          num_labels(labels), accuracy_test(acc_test),
-          c_attn_w(n_layers), c_attn_b(n_layers), c_proj_w(n_layers), c_proj_b(n_layers),
-          ffn_up_w(n_layers), ffn_up_b(n_layers), ffn_down_w(n_layers), ffn_down_b(n_layers),
-          ln1_w(n_layers), ln1_b(n_layers), ln2_w(n_layers), ln2_b(n_layers)
+    model
+    (
+        u64 layers, 
+        u64 heads, 
+        u64 embd, 
+        u64 interm, 
+        u64 labels, 
+        bool acc_test
+    )
+        : 
+            n_layers(layers), 
+            n_heads(heads), 
+            n_embd(embd), 
+            n_interm(interm),
+            num_labels(labels), 
+            accuracy_test(acc_test),
+            c_attn_w(n_layers), 
+            c_attn_b(n_layers), 
+            c_proj_w(n_layers), 
+            c_proj_b(n_layers),
+            ffn_up_w(n_layers), 
+            ffn_up_b(n_layers), 
+            ffn_down_w(n_layers), 
+            ffn_down_b(n_layers),
+            ln1_w(n_layers), 
+            ln1_b(n_layers), 
+            ln2_w(n_layers), 
+            ln2_b(n_layers)
     {
         for (int i = 0; i < n_layers; ++i)
         {
@@ -233,7 +249,6 @@ namespace
                     for (int j = 0; j < n_token; ++j)
                     {
                         u64 idx = h * n_token * n_token + i * n_token + j;
-                        // Add mask to score. For padding positions (mask[j] < 0), this pushes score to -inf
                         all_scores[idx] = all_scores[idx] + mask[j];
                     }
                 }

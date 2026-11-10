@@ -1,6 +1,3 @@
-// @mincy1224: reorganize some parts to avoid redefinitions.
-//  impl details ref {app261101/src/fs_bert}
-
 #ifndef FLEX_SHARK_BERT_FV_HPP
 #define FLEX_SHARK_BERT_FV_HPP
 
@@ -36,14 +33,12 @@ namespace fs
 {        
     struct BertModel
     {
-        // config
         u64 n_layers = 12;
         u64 n_heads = 12;
         u64 n_embd = 768;
         u64 n_interm = 3072;
-        int logdivisor = 3; // log2(sqrt(n_embd / n_heads))
+        int logdivisor = 3; 
 
-        // weights
         std::vector<span<u64>> c_attn_w;
         std::vector<span<u64>> c_attn_b;
 
@@ -51,19 +46,16 @@ namespace fs
         std::vector<span<u64>> c_proj_b;
 
         std::vector<span<u64>> ffn_up_w;
-        std::vector<span<u64>> ffn_up_b; // Note: ffn_up_b must be keeping 2f precision
+        std::vector<span<u64>> ffn_up_b;
 
         std::vector<span<u64>> ffn_down_w;
         std::vector<span<u64>> ffn_down_b;
 
-        // LayerNorm weights
         std::vector<span<u64>> ln1_w;
         std::vector<span<u64>> ln1_b;
         std::vector<span<u64>> ln2_w;
         std::vector<span<u64>> ln2_b;
-
-        // Classifier Head weights
-        // Classifier (Linear)
+        
         span<u64> classifier_w;
         span<u64> classifier_b;
         u64 num_labels = 2;

@@ -10,11 +10,6 @@
 
 namespace fs
 {
-    /// LeNet-5 style wrapper around the BERT sentence classifier.
-    ///
-    /// Self contained on purpose: the implementation in fs_bert_cls.cpp carries
-    /// its own copy of the model layout and forward pass (the same computation
-    /// as fs_bert_fv), so this app and the fs_bert_fv app stay independent.
     class bert_cls
     {
     public:
@@ -40,7 +35,6 @@ namespace fs
             std::span<const shark::u64> classifier_w{}, classifier_b{};
         };
 
-        /// Implementation detail (weights + forward pass); defined in the .cpp.
         struct model;
 
         bert_cls();
