@@ -4,7 +4,7 @@
 ## LeNet-5
 Download the weights & dataset.
 
-```
+```shell
 python3 -m pip install onnx
 
 chmod +x ./script/lenet5_data_ready.sh
@@ -13,11 +13,11 @@ chmod +x ./script/lenet5_data_ready.sh
 
 Test The Application.
 
-```
+```shell
 python3 ./script/lenet5_test.py
 ```
 
-```
+```shell
 OMP_NUM_THREADS=8 python3 ./script/lenet5_test.py --binary build-rel/run_lenet5
 ```
 
