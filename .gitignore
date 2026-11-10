@@ -18,3 +18,4 @@ ml/datasets/**/*.json
 *.dat
 .cache
 *.pyc
+build-rel/

@@ -2,65 +2,105 @@
 #include <shark/utils/assert.hpp>
 #include <iostream>
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
+
+#include <cstdio>
+#include <cstring>
+#include <string>
 
 namespace shark
 {
-    SocketBuf::SocketBuf(std::string ip, int port, bool onlyRecv = false)
+    namespace
     {
-        this->t = BUF_SOCKET;
-        std::cerr << "trying to connect with server...";
+        /// Channel endpoints are Unix domain sockets rather than TCP: WSL2's
+        /// mirrored networking resets loopback TCP connections mid-stream, and
+        /// going through the socket API keeps the bytes off the network stack
+        /// entirely. The path is relative, so both peers must share a working
+        /// directory (they do: the key files live there as well).
+        std::string channel_path(int port)
         {
-            struct sockaddr_in addr;
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = inet_addr(ip.c_str());
+            return ".shark-" + std::to_string(port) + ".sock";
+        }
+
+        socklen_t unix_addr(struct sockaddr_un &addr, const std::string &path)
+        {
+            std::memset(&addr, 0, sizeof(addr));
+            addr.sun_family = AF_UNIX;
+            std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", path.c_str());
+            return sizeof(addr);
+        }
+
+        /// Unix sockets default to the ~200 KiB net.core.w*_default and, unlike
+        /// TCP, the kernel never grows them. The protocols move 75 KiB - 384 KiB
+        /// blocks per send, so mirror the TCP autotuning ceiling instead.
+        void tune_buffer(int fd)
+        {
+            const int size = 4 << 20;
+            setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+        }
+
+        int connect_channel(int port)
+        {
+            struct sockaddr_un addr;
+            const socklen_t len = unix_addr(addr, channel_path(port));
             while (1)
             {
-                recvsocket = socket(AF_INET, SOCK_STREAM, 0);
-                if (recvsocket < 0)
+                const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+                if (fd < 0)
                 {
                     perror("socket");
                     exit(1);
                 }
-                if (connect(recvsocket, (struct sockaddr *)&addr, sizeof(addr)) == 0)
+                if (connect(fd, (struct sockaddr *)&addr, len) == 0)
                 {
-                    break;
+                    tune_buffer(fd);
+                    return fd;
                 }
-                ::close(recvsocket);
+                ::close(fd);
                 usleep(1000);
             }
-            const int one = 1;
-            setsockopt(recvsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
         }
+
+        int listen_channel(int port)
+        {
+            const std::string path = channel_path(port);
+            ::unlink(path.c_str());
+            struct sockaddr_un addr;
+            const socklen_t len = unix_addr(addr, path);
+
+            const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (fd < 0)
+            {
+                perror("socket");
+                exit(1);
+            }
+            if (::bind(fd, (struct sockaddr *)&addr, len) < 0)
+            {
+                perror("error: bind");
+                exit(1);
+            }
+            if (listen(fd, 8) < 0)
+            {
+                perror("error: listen");
+                exit(1);
+            }
+            return fd;
+        }
+    }
+
+    SocketBuf::SocketBuf(std::string ip, int port, bool onlyRecv = false)
+    {
+        (void)ip; // unused: both channels are Unix domain sockets named by port
+        this->t = BUF_SOCKET;
+        std::cerr << "trying to connect with server...";
+        recvsocket = connect_channel(port);
         sleep(1);
         if (!onlyRecv)
         {
-            struct sockaddr_in addr;
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port + 3);
-            addr.sin_addr.s_addr = inet_addr(ip.c_str());
-            while (1)
-            {
-                sendsocket = socket(AF_INET, SOCK_STREAM, 0);
-                if (sendsocket < 0)
-                {
-                    perror("socket");
-                    exit(1);
-                }
-                if (connect(sendsocket, (struct sockaddr *)&addr, sizeof(addr)) == 0)
-                {
-                    break;
-                }
-                ::close(sendsocket);
-                usleep(1000);
-            }
-            const int one = 1;
-            setsockopt(sendsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+            sendsocket = connect_channel(port + 3);
         }
         std::cerr << "connected" << std::endl;
     }
@@ -163,59 +203,19 @@ namespace shark
         int sendsocket, recvsocket;
         std::cerr << "waiting for connection from client...";
         {
-            struct sockaddr_in dest;
-            struct sockaddr_in serv;
-            socklen_t socksize = sizeof(struct sockaddr_in);
-            memset(&serv, 0, sizeof(serv));
-            serv.sin_family = AF_INET;
-            serv.sin_addr.s_addr = htonl(INADDR_ANY); /* set our address to any interface */
-            serv.sin_port = htons(port);              /* set the server port number */
-            int mysocket = socket(AF_INET, SOCK_STREAM, 0);
-            int reuse = 1;
-            setsockopt(mysocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse,
-                    sizeof(reuse));
-            if (::bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0)
-            {
-                perror("error: bind");
-                exit(1);
-            }
-            if (listen(mysocket, 1) < 0)
-            {
-                perror("error: listen");
-                exit(1);
-            }
-            sendsocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
-            const int one = 1;
-            setsockopt(sendsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-            close(mysocket);
+            const int mysocket = listen_channel(port);
+            sendsocket = accept(mysocket, nullptr, nullptr);
+            tune_buffer(sendsocket);
+            ::unlink(channel_path(port).c_str());
+            ::close(mysocket);
         }
 
         {
-            struct sockaddr_in dest;
-            struct sockaddr_in serv;
-            socklen_t socksize = sizeof(struct sockaddr_in);
-            memset(&serv, 0, sizeof(serv));
-            serv.sin_family = AF_INET;
-            serv.sin_addr.s_addr = htonl(INADDR_ANY); /* set our address to any interface */
-            serv.sin_port = htons(port + 3);          /* set the server port number */
-            int mysocket = socket(AF_INET, SOCK_STREAM, 0);
-            int reuse = 1;
-            setsockopt(mysocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse,
-                    sizeof(reuse));
-            if (::bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0)
-            {
-                perror("error: bind");
-                exit(1);
-            }
-            if (listen(mysocket, 1) < 0)
-            {
-                perror("error: listen");
-                exit(1);
-            }
-            recvsocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
-            const int one = 1;
-            setsockopt(recvsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-            close(mysocket);
+            const int mysocket = listen_channel(port + 3);
+            recvsocket = accept(mysocket, nullptr, nullptr);
+            tune_buffer(recvsocket);
+            ::unlink(channel_path(port + 3).c_str());
+            ::close(mysocket);
         }
 
         std::cerr << "connected" << std::endl;
