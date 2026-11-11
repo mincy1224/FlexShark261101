@@ -99,6 +99,6 @@ target_link_libraries(run_bert_fv ${PROJECT_NAME}
 
 foreach(bert_runner IN ITEMS run_bert_cls run_bert_fv)
     target_compile_definitions(${bert_runner} PRIVATE
-        FS_BERT_DEFAULT_WEIGHTS="${CMAKE_CURRENT_SOURCE_DIR}/raw_data/bert_weights_fixed.npz"
+        FS_BERT_DEFAULT_WEIGHTS="${CMAKE_CURRENT_SOURCE_DIR}/bert_data/cache/bert_weights_fixed.npz"
     )
 endforeach()

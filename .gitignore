@@ -14,7 +14,7 @@ results/
 ml/datasets/**/*.txt
 ml/datasets/**/*.json
 *.npz
-!/raw_data/bert_weights_fixed.npz
+/raw_data/
 *.csv
 *.dat
 .cache
