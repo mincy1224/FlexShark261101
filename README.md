@@ -15,13 +15,25 @@
    ```
 
 3. 预处理
-   Bert
+   
+   这是预处理20组 Bert，先看看结果
+   ```sh
+   python script/bert_pretreat.py --root bert_data --weights /path/to/bert_weights_fixed.npz --count 20
+   ```
+
+   完整实验
    ```sh
    python script/bert_pretreat.py --root bert_data --weights /path/to/bert_weights_fixed.npz
    ```
-   LeNet-5
+
+   这是预处理20组 LeNet-5，先看看结果
    ```sh
-   python script/lenet5_pretreat.py --root lenet5_data
+   python script/lenet5_pretreat.py --root lenet5_data --count 20
+   ```
+
+   完整实验
+   ```sh
+   python script/lenet5_pretreat.py --root lenet5_data --count 20
    ```
 
 4. 实验
