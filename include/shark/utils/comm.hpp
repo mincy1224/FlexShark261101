@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <fstream>
+#include <memory>
 #include <string>
 
 #include <shark/types/u128.hpp>
@@ -46,6 +47,7 @@ namespace shark
         {
             printf("Opening file=%s, mode=%d\n", filename.data(), f);
             this->t = BUF_FILE;
+            this->file.exceptions(std::ios::failbit | std::ios::badbit);
             if (f == F_WR_ONLY)
                 this->file.open(filename, std::ios::out | std::ios::binary);
             else
@@ -60,9 +62,9 @@ namespace shark
 
         char *read(u64 bytes)
         {
-            char *newBuf = new char[bytes];
-            this->read(newBuf, bytes);
-            return newBuf;
+            auto buffer = std::make_unique<char[]>(bytes);
+            this->read(buffer.get(), bytes);
+            return buffer.release();
         }
 
         void write(char *buf, u64 bytes)
@@ -323,8 +325,8 @@ namespace shark
         template <typename T>
         shark::span<T> recv_array(u64 size)
         {
-            T* buf = (T*) keyBuf->read(size * sizeof(T));
-            shark::span<T> arr(buf, size);
+            shark::span<T> arr(size);
+            recv_array(arr);
             return arr;
         }
 
