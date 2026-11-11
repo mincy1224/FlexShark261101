@@ -5,10 +5,10 @@ The model comes from the original implementation this project is evaluated
 against: https://github.com/sbondaryev/ml-explorations/blob/master/lenet/lenet-5.ipynb
 (the "LeNet-5: A Visual Guide" article). That notebook keeps its trained weights
 in memory only, but its exported graph is published next to it and downloaded by
-lenet5_data_ready.sh as lenet5.onnx, so executing that graph replays the very
+lenet5_pretreat.py as cache/lenet5.onnx, so executing that graph replays the very
 same computation without re-implementing any layer here.
 
-For every NPZ produced by lenet5_mnist_format.py the Q16 fixed-point image is
+For every NPZ produced by lenet5_pretreat.py the Q16 fixed-point image is
 decoded back to float and fed to that graph; the arg-min of the RBF distances is
 the plaintext prediction. lenet5_test.py then compares the secret-shared run
 against both the ground-truth label and these predictions.
@@ -24,6 +24,7 @@ import numpy as np
 import onnx
 from onnx.reference import ReferenceEvaluator
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 FRACTIONAL_BITS = 16
 INPUT_NAME = "input"
 OUTPUT_NAME = "output_distances"
@@ -64,31 +65,29 @@ def show_progress(done, total, correct, elapsed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path("lenet5_data"),
+    parser.add_argument("--root", type=Path, default=REPO_ROOT / "lenet5_data",
                         help="data directory, default: repository lenet5_data/")
-    parser.add_argument("--samples-dir", type=Path, default=Path("mnist-test"),
-                        help="sample directory relative to --root, default: mnist-test")
-    parser.add_argument("--model", type=Path, default=Path("lenet5.onnx"),
-                        help="ONNX model relative to --root, default: lenet5.onnx")
-    parser.add_argument("--output", type=Path, default=Path("plaintext.csv"),
-                        help="output CSV relative to --root, default: plaintext.csv")
     parser.add_argument("--limit", type=int,
                         help="only process the first N samples")
     args = parser.parse_args()
 
     root = args.root.resolve()
-    samples = sorted((root / args.samples_dir).glob("*.npz"))
+    samples_dir = root / "mnist-test"
+    samples = sorted(samples_dir.glob("*.npz"))
     if args.limit is not None:
         samples = samples[:args.limit]
     if not samples:
-        parser.error(f"no NPZ files in {root / args.samples_dir}")
+        parser.error(f"no NPZ files in {samples_dir}")
 
-    model_path = (root / args.model).resolve()
+    model_path = root / "cache" / "lenet5.onnx"
+    legacy_model = root / "lenet5.onnx"
+    if not model_path.is_file() and legacy_model.is_file():
+        model_path = legacy_model
     if not model_path.is_file():
         parser.error(f"model not found: {model_path}")
     session = ReferenceEvaluator(onnx.load(model_path, load_external_data=False))
 
-    output = (root / args.output).resolve()
+    output = root / "plaintext.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     correct = 0

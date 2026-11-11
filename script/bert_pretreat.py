@@ -7,28 +7,29 @@ For every example this script
     are built for) and computes the BERT input embeddings,
   * stores them as Q16 fixed point (`input`, uint64) together with the
     additive attention mask (`attention_mask`, uint32),
-  * records the ground-truth label for script/bert_test.py,
-  * exports the matching weights as Q16 (Q32 for ffn_up_b).
+  * records the ground-truth label for script/bert_test.py.
 
-Outputs (under <repo>/bert_data):
+Outputs one NPZ per example under samples/ in the data directory.
 
-    samples/input_000000_fixed.npz ...   one file per example
-    bert_weights_fixed.npz               weights for `run_bert_* 0`
+The checkpoint supplies the embedding layer and tokenizer. Pass --weights to
+copy an inference weight NPZ into cache/bert_weights_fixed.npz under --root.
 
-Requires: pip install datasets transformers torch
+Requires: pip install numpy datasets transformers torch
 """
 
 import argparse
+import os
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
+from zipfile import is_zipfile
 
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT = REPO_ROOT / "bert_data"
-SAMPLES_DIR = ROOT / "samples"
-WEIGHTS_PATH = ROOT / "bert_weights_fixed.npz"
 
 MODEL_NAME = "textattack/bert-base-uncased-QNLI"
 TEXT_FIELDS = ("question", "sentence")
@@ -60,51 +61,6 @@ def encode_mask(mask):
     return scaled.view(np.uint32)
 
 
-def export_weights(model):
-    if (model.config.hidden_size != HIDDEN_SIZE or
-            len(model.bert.encoder.layer) != NUM_LAYERS or
-            model.config.num_attention_heads != NUM_HEADS or
-            model.config.num_labels != NUM_LABELS):
-        raise ValueError("run_bert_* expects bert-base with a 2-label head")
-
-    out = {}
-    for i, layer in enumerate(model.bert.encoder.layer):
-        attn = layer.attention.self
-        proj = layer.attention.output.dense
-        ln1 = layer.attention.output.LayerNorm
-        up = layer.intermediate.dense
-        down = layer.output.dense
-        ln2 = layer.output.LayerNorm
-
-        q = attn.query.weight.detach().cpu().numpy()
-        k = attn.key.weight.detach().cpu().numpy()
-        v = attn.value.weight.detach().cpu().numpy()
-        prefix = f"l{i}_"
-        out[prefix + "c_attn_w"] = encode_fixed(np.concatenate([q, k, v], axis=0).T, 16, prefix + "c_attn_w")
-        out[prefix + "c_attn_b"] = encode_fixed(np.concatenate([
-            attn.query.bias.detach().cpu().numpy(),
-            attn.key.bias.detach().cpu().numpy(),
-            attn.value.bias.detach().cpu().numpy()]), 16, prefix + "c_attn_b")
-        out[prefix + "c_proj_w"] = encode_fixed(proj.weight.detach().cpu().numpy().T, 16, prefix + "c_proj_w")
-        out[prefix + "c_proj_b"] = encode_fixed(proj.bias.detach().cpu().numpy(), 16, prefix + "c_proj_b")
-        out[prefix + "ffn_up_w"] = encode_fixed(up.weight.detach().cpu().numpy().T, 16, prefix + "ffn_up_w")
-        # the bias is added before truncating the products: it lives in Q32.
-        out[prefix + "ffn_up_b"] = encode_fixed(up.bias.detach().cpu().numpy(), 32, prefix + "ffn_up_b")
-        out[prefix + "ffn_down_w"] = encode_fixed(down.weight.detach().cpu().numpy().T, 16, prefix + "ffn_down_w")
-        out[prefix + "ffn_down_b"] = encode_fixed(down.bias.detach().cpu().numpy(), 16, prefix + "ffn_down_b")
-        out[prefix + "ln1_w"] = encode_fixed(ln1.weight.detach().cpu().numpy(), 16, prefix + "ln1_w")
-        out[prefix + "ln1_b"] = encode_fixed(ln1.bias.detach().cpu().numpy(), 16, prefix + "ln1_b")
-        out[prefix + "ln2_w"] = encode_fixed(ln2.weight.detach().cpu().numpy(), 16, prefix + "ln2_w")
-        out[prefix + "ln2_b"] = encode_fixed(ln2.bias.detach().cpu().numpy(), 16, prefix + "ln2_b")
-
-    out["classifier_w"] = encode_fixed(model.classifier.weight.detach().cpu().numpy().T, 16, "classifier_w")
-    out["classifier_b"] = encode_fixed(model.classifier.bias.detach().cpu().numpy(), 16, "classifier_b")
-
-    with WEIGHTS_PATH.open("wb") as stream:
-        np.savez(stream, **out)
-    return len(out)
-
-
 def format_duration(seconds):
     seconds = int(max(seconds, 0.0))
     hours, rest = divmod(seconds, 3600)
@@ -128,13 +84,51 @@ def show_progress(done, total, elapsed):
         print(line, file=sys.stderr, flush=True)
 
 
+def load_checkpoint(loader, cache_dir, **kwargs):
+    try:
+        return loader.from_pretrained(MODEL_NAME, cache_dir=cache_dir,
+                                      local_files_only=True, **kwargs)
+    except OSError:
+        return loader.from_pretrained(MODEL_NAME, cache_dir=cache_dir, **kwargs)
+
+
+def cache_weights(cache, source):
+    destination = cache / "bert_weights_fixed.npz"
+    source = (destination if source is None else source).resolve()
+    if not source.is_file() or not is_zipfile(source):
+        raise ValueError(f"missing or invalid weight NPZ: {source}. Pass --weights with a valid file.")
+    if source == destination.resolve():
+        return
+
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".weights-", dir=cache) as scratch:
+        copied = Path(scratch) / destination.name
+        shutil.copyfile(source, copied)
+        copied.replace(destination)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=ROOT,
+                        help="data directory, default: repository bert_data/")
+    parser.add_argument("--weights", type=Path,
+                        help="weight NPZ to copy into cache/, required when the cache is empty")
     parser.add_argument("--count", type=int, default=200,
                         help="number of QNLI examples to export, default: 200")
     args = parser.parse_args()
     if args.count <= 0:
         parser.error("--count must be positive")
+
+    root = args.root.resolve()
+    cache = root / "cache"
+    try:
+        cache_weights(cache, args.weights)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    hub_cache = cache / "hub"
+    os.environ["HF_HUB_CACHE"] = str(hub_cache)
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(hub_cache)
+    os.environ["HF_XET_CACHE"] = str(cache / "xet")
 
     try:
         import torch
@@ -143,18 +137,22 @@ def main():
     except ImportError as error:
         parser.exit(1, f"{parser.prog}: pip install datasets transformers torch ({error})\n")
 
+    samples_dir = root / "samples"
+    if samples_dir.resolve() != samples_dir:
+        parser.error(f"sample directory resolves outside its expected path: {samples_dir}")
+    if samples_dir.exists():
+        shutil.rmtree(samples_dir)
+    samples_dir.mkdir(parents=True)
+
     print(f"Loading {MODEL_NAME} ...", file=sys.stderr)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=NUM_LABELS)
+    tokenizer = load_checkpoint(AutoTokenizer, hub_cache)
+    model = load_checkpoint(AutoModelForSequenceClassification, hub_cache, num_labels=NUM_LABELS)
     model.eval()
 
-    dataset = load_dataset("glue", "qnli", split="validation")
+    dataset = load_dataset("glue", "qnli", split="validation", cache_dir=str(cache / "datasets"))
     total = min(args.count, len(dataset))
-
-    ROOT.mkdir(parents=True, exist_ok=True)
-    SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
-    for stale in SAMPLES_DIR.glob("input_*_fixed.npz"):
-        stale.unlink()
+    if total == 0:
+        parser.error("QNLI validation split is empty")
 
     started = time.monotonic()
     show_progress(0, total, 0.0)
@@ -177,13 +175,11 @@ def main():
                 "sample_index": np.array([index], dtype=np.uint64),
                 "label": np.array([int(example["label"])], dtype=np.uint8),
             }
-            with (SAMPLES_DIR / f"input_{done - 1:06d}_fixed.npz").open("wb") as stream:
+            with (samples_dir / f"input_{done - 1:06d}_fixed.npz").open("wb") as stream:
                 np.savez(stream, **sample)
             show_progress(done, total, time.monotonic() - started)
 
-    tensors = export_weights(model)
-    print(f"Wrote {tensors} fixed-point tensors to {WEIGHTS_PATH}")
-    print(f"Wrote {total} samples to {SAMPLES_DIR}")
+    print(f"Wrote {total} samples to {samples_dir}")
     return 0
 
 

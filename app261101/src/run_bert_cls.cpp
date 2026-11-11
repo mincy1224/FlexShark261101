@@ -1,21 +1,17 @@
 #include "fs_bert_cls.hpp"
+#include "bert_fixed_npz.hpp"
 
 #include <shark/protocols/finalize.hpp>
 #include <shark/protocols/init.hpp>
 #include <shark/protocols/input.hpp>
 #include <shark/protocols/output.hpp>
 
-#include <cnpy.h>
-
 #include <algorithm>
-#include <cstddef>
 #include <exception>
-#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -24,33 +20,11 @@ namespace
     namespace protocol = shark::protocols;
     using shark::u32;
     using shark::u64;
-
-    constexpr std::size_t TOKEN_COUNT = 128;
-    constexpr std::size_t HIDDEN_SIZE = 768;
-    constexpr std::size_t FFN_SIZE = 3072;
-    constexpr std::size_t LABEL_COUNT = 2;
-
-    template <typename T>
-    std::span<const T> read_array(const cnpy::npz_t& archive, const std::string& name,
-                                  std::initializer_list<std::size_t> shape)
-    {
-        const auto entry = archive.find(name);
-        if (entry == archive.end())
-            throw std::runtime_error("missing NPZ array: " + name);
-
-        const auto& array = entry->second;
-        if (array.word_size != sizeof(T) || array.fortran_order ||
-            !std::equal(array.shape.begin(), array.shape.end(), shape.begin(), shape.end()))
-        {
-            throw std::runtime_error("unexpected NPZ array layout: " + name);
-        }
-
-        return {array.data<T>(), array.num_vals};
-    }
+    using namespace fs::bert_fixed_npz;
 
     void load_weights(fs::bert_cls& model, const char* path)
     {
-        const auto archive = cnpy::npz_load(path);
+        const auto archive = load_archive(path);
         fs::bert_cls::params params;
         for (std::size_t i = 0; i < params.layers.size(); ++i)
         {
@@ -128,7 +102,7 @@ int main(int argc, char** argv)
         shark::span<u32> mask(TOKEN_COUNT);
         if (pid == protocol::CLIENT)
         {
-            const auto sample = cnpy::npz_load(positional[1]);
+            const auto sample = load_archive(positional[1]);
             const auto embeddings = read_array<u64>(sample, "input", {TOKEN_COUNT, HIDDEN_SIZE});
             const auto attention_mask = read_array<u32>(sample, "attention_mask", {TOKEN_COUNT});
             std::copy(embeddings.begin(), embeddings.end(), input.begin());
@@ -147,7 +121,7 @@ int main(int argc, char** argv)
 
         fs::bert_cls model;
         if (pid == protocol::SERVER)
-            load_weights(model, count == 2 ? positional[1] : "raw_data/bert_weights_fixed.npz");
+            load_weights(model, count == 2 ? positional[1] : DEFAULT_WEIGHTS);
         else
             model.load_params({}, protocol::SERVER);
 

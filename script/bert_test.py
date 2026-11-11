@@ -15,8 +15,9 @@ The dealer keys are generated once with run_bert_cls and replayed for every
 sample and for both binaries: the two implementations perform the same
 computation, so they consume the same key material.
 
-All samples found in bert_data/samples are tested; results go to
-bert_data/bert_results.csv.
+Both servers use cache/bert_weights_fixed.npz under --root.
+The script tests prepared NPZs in samples/ under --root. Generate them from
+raw QNLI with script/bert_pretreat.py. Results go to result/bert_results.csv.
 """
 
 import argparse
@@ -27,15 +28,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT = REPO_ROOT / "bert_data"
-SAMPLES_DIR = ROOT / "samples"
-WEIGHTS = ROOT / "bert_weights_fixed.npz"
-OUTPUT = ROOT / "bert_results.csv"
 FV_BINARY = REPO_ROOT / "build" / "run_bert_fv"
 CLS_BINARY = REPO_ROOT / "build" / "run_bert_cls"
 
@@ -92,14 +91,14 @@ def run_dealer(workdir, timeout):
         raise RuntimeError(f"dealer exited with code {proc.returncode}\n{tail(log_path)}")
 
 
-def run_pair(binary, sample, workdir, timeout, tag):
+def run_pair(binary, weights, sample, workdir, timeout, tag):
     """Start one server/client pair and return the prediction it printed."""
     server_log = workdir / f"{tag}-server.log"
     client_log = workdir / f"{tag}-client.log"
     deadline = time.monotonic() + timeout
 
     with server_log.open("wb") as log:
-        server = subprocess.Popen([str(binary), *FLAGS, "0", str(WEIGHTS)],
+        server = subprocess.Popen([str(binary), *FLAGS, "0", str(weights)],
                                   cwd=workdir, stdin=subprocess.DEVNULL,
                                   stdout=log, stderr=subprocess.STDOUT)
     try:
@@ -137,23 +136,30 @@ def sample_label(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=ROOT,
+                        help="data directory, default: repository bert_data/")
     parser.add_argument("--timeout", type=float, default=3600,
                         help="time limit per server/client pair in seconds, default: 3600")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
 
-    for path, what in ((FV_BINARY, "run_bert_fv"), (CLS_BINARY, "run_bert_cls"),
-                       (WEIGHTS, "weights")):
+    for path, what in ((FV_BINARY, "run_bert_fv"), (CLS_BINARY, "run_bert_cls")):
         if not path.exists():
             parser.error(f"{what} not found: {path}")
-    samples = sorted(SAMPLES_DIR.glob("*.npz"))
+    root = args.root.resolve()
+    weights = root / "cache" / "bert_weights_fixed.npz"
+    if not zipfile.is_zipfile(weights):
+        parser.error(f"missing or invalid weights NPZ: {weights}. Run bert_pretreat.py with --weights.")
+    samples_dir = root / "samples"
+    output = root / "result" / "bert_results.csv"
+    samples = sorted(samples_dir.glob("*.npz"))
     if not samples:
-        parser.error(f"no samples in {SAMPLES_DIR}")
+        parser.error(f"no samples in {samples_dir}")
 
     correct = same = errors = 0
     run_started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix=".bert-run-", dir=ROOT) as scratch:
+    with tempfile.TemporaryDirectory(prefix=".bert-run-", dir=root) as scratch:
         workdir = Path(scratch).resolve()
         try:
             run_dealer(workdir, args.timeout)
@@ -161,8 +167,8 @@ def main():
             print(f"dealer failed: {error}", file=sys.stderr)
             return 1
 
-        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        with OUTPUT.open("w", encoding="utf-8", newline="") as stream:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w", encoding="utf-8", newline="") as stream:
             writer = csv.writer(stream)
             writer.writerow(["sample", "fv_prediction", "cls_prediction", "label",
                              "same", "correct", "elapsed_s", "error"])
@@ -171,8 +177,8 @@ def main():
                 started = time.monotonic()
                 label = sample_label(sample)
                 try:
-                    fv_prediction = run_pair(FV_BINARY, sample, workdir, args.timeout, "fv")
-                    cls_prediction = run_pair(CLS_BINARY, sample, workdir, args.timeout, "cls")
+                    fv_prediction = run_pair(FV_BINARY, weights, sample, workdir, args.timeout, "fv")
+                    cls_prediction = run_pair(CLS_BINARY, weights, sample, workdir, args.timeout, "cls")
                     error = ""
                 except (OSError, RuntimeError) as failure:
                     fv_prediction = cls_prediction = ""
@@ -199,7 +205,7 @@ def main():
                               time.monotonic() - run_started)
 
     completed = len(samples) - errors
-    print(f"Results: {OUTPUT}")
+    print(f"Results: {output}")
     print(f"samples={len(samples)}  errors={errors}")
     print(f"cls vs label: {100 * correct / max(completed, 1):.2f}% ({correct}/{completed})")
     if completed:
