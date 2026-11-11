@@ -77,6 +77,7 @@ target_link_libraries(run_lenet5 PRIVATE ${PROJECT_NAME}
 add_executable(run_bert_cls
     app261101/src/run_bert_cls.cpp
     app261101/src/fs_bert_cls.cpp
+    app261101/src/fs_bert_fv.cpp
 )
 target_include_directories(run_bert_cls
     PRIVATE ${PROJECT_SOURCE_DIR}/app261101/include
@@ -95,3 +96,9 @@ target_include_directories(run_bert_fv
 target_link_libraries(run_bert_fv ${PROJECT_NAME}
     cnpy
 )
+
+foreach(bert_runner IN ITEMS run_bert_cls run_bert_fv)
+    target_compile_definitions(${bert_runner} PRIVATE
+        FS_BERT_DEFAULT_WEIGHTS="${CMAKE_CURRENT_SOURCE_DIR}/raw_data/bert_weights_fixed.npz"
+    )
+endforeach()
